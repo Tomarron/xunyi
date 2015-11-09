@@ -1,0 +1,101 @@
+#include "stdio.h"
+#include"math.h"
+
+#define DT  0.01//时间单位dt,做积分用，取值根据实际情况进行设置
+#define VD  1//四旋翼期望的速度m/s
+#define ZD  5//四旋翼期望的高度m
+#define psiC 0.0//四旋翼期望的偏航角设定为0
+
+volatile double vgx,vgy,vgz;//Ground坐标系下的速度,通过飞控外发的数据包得到
+volatile double pgx,pgy,pgz;//Ground坐标系下的位置，pgx,pgy由积分得到，pgz由飞控外发的数据包得到
+
+volatile double e1,e2,e3;//定义的路径跟踪误差
+volatile double de1,de2;//定义的路径跟踪误差的一阶导数
+volatile double phiC,thetaC;//四旋翼期望的滚转角和俯仰角
+
+double inv_G[3][3]={{0.5,0,0.7071},{0.5,0,-0.7071},{0,1,0}};//G的转置矩阵
+
+//初始点定义为原点
+void init(void)
+{
+	pgx=0;
+	pgy=0;
+	pgz=0;//Z轴位置高度由飞控外发的数据包中的信息得到
+
+}
+
+//积分求出四旋翼的实时位置，时间长以后会有积分漂移，最好结合其他数据进行修正
+void Integralxy(void)
+{
+	pgx+=vgx*DT;
+	pgy+=vgy*DT;
+
+}
+//实时的误差e
+void error(void)
+{
+	e1=pgx+pgy-1;//x+y-1;
+	e2=pgz-ZD;//z-zd;
+	e3=0.7071*vgx-0.7071*vgy-VD;//tv-vd;
+}
+//误差的一阶导
+void derror(void)
+{
+	de1=vgx+vgy;
+	de2=vgz;
+	
+}
+//PD控制,得出期望的欧拉角
+void PD(double k1d,double k1p,double k2d,double k2p,double k3p)
+{
+    double u1,u2,u3;//
+	double u11,u22,u33;//虚拟控制量
+	double pownumber=0;
+
+	u1=-k1d*de1-k1p*e1;
+	u2=-k2d*de2-k2p*e2;
+	u3=-k3p*e3;
+
+	u11=inv_G[0][0]*u1+inv_G[0][1]*u2+inv_G[0][2]*u3;
+	u22=inv_G[1][0]*u1+inv_G[1][1]*u2+inv_G[1][2]*u3;
+	u33=inv_G[2][0]*u1+inv_G[2][1]*u2+inv_G[2][2]*u3+9.8;
+	pownumber=u11*u11 + u22*u22 + u33*u33;
+
+	phiC=asin((u11*sin(psiC) - u22*cos(psiC))/sqrt(pownumber))*57.3;//期望的滚转角
+	thetaC=atan2(u11*cos(psiC)+u22*sin(psiC),u33)*57.3;//期望的偏航角
+	//欧拉角的范围在-30- +30之间
+
+	if (phiC>30)
+	{
+		phiC=30;
+	}
+	if(phiC<-30)
+	{
+		phiC=-30;
+	}
+
+
+	if (thetaC>30)
+	{
+		thetaC=30;
+	}
+	if(thetaC<-30)
+	{
+		thetaC=-30;
+	}
+	
+}
+//函数入口
+void main(void)
+{
+	//函数的执行顺序
+        /*
+	init();
+	接收飞控外发的数据包，分析，得到pgz,vgx,vgy
+	Integralxy();
+	error();
+	derror();
+	 PD(0.5,0.05,0.5,0.05,0.5);//PD参数需要进行调节
+	*/
+	
+}
